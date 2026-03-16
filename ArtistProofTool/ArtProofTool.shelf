@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <!-- This file contains definitions of shelves, toolbars, and tools.
+ It should not be hand-edited when it is being used by the application.
+ Note, that two definitions of the same element are not allowed in
+ a single file. -->
+
+  <toolshelf name="ArtProofTool" label="Art Proof Tool">
+    <memberTool name="ArtProofTool"/>
+  </toolshelf>
+
+  <tool name="ArtProofTool" label="Shape Deform Tool" icon="SphereDeform_IMG.png">
+    <helpText><![CDATA[**This tool's purpose is to create a simple geometric shape and deform it.
+
+------------------------SHAPE OPTIONS------------------------------
+
+Sphere
+
+Box
+
+Torus
+
+Grid
+
+Tube
+
+-------------------------DEFORM OPTIONS-----------------------------
+
+Fractal
+
+Mountain
+
+**After creating your deformed geometry, you can have it automatically it to your desktop.]]></helpText>
+    <toolMenuContext name="viewer">
+      <contextNetType>OBJ</contextNetType>
+    </toolMenuContext>
+    <toolMenuContext name="network">
+      <contextNetType>OBJ</contextNetType>
+    </toolMenuContext>
+    <script scriptType="python"><![CDATA[import os
+import random
+import hou
+from PySide6.QtWidgets import QMainWindow, QMessageBox, QPushButton, QComboBox, QVBoxLayout, QWidget, QLabel, QSlider
+from PySide6.QtCore import Qt
+
+class DeformShape:
+    def __init__(self):
+        self.geoList = ['sphere', 'box', 'torus', 'grid', 'tube']
+        self.deformList = ['fractal', 'mountain']
+        self.container = None
+        self.geo = None
+
+    def createGeo(self, selected_shape):
+        objNode = hou.node("/obj")
+    
+        # Delete all existing nodes in /obj
+        for child in objNode.children():
+            try:
+                child.destroy()
+            except:
+                print(f"Could not delete node: {child.name()}")
+    
+        # Create a fresh container and the selected geometry node
+        self.container = objNode.createNode("geo", "myGeo")
+        self.geo = self.container.createNode(selected_shape, f"my_{selected_shape}")
+        
+        self.geo.parm('type').set(1)
+        if selected_shape == 'tube':
+            self.geo.parm('cap').set(1)
+    
+        objNode.layoutChildren()
+
+
+    def createDeformed(self, selected_deform, selected_scale, smooth_value=None, element_size=None):
+        if self.geo is None:
+            print("No geometry created yet.")
+            return
+        # Create a new node for the deformer
+        self.deformer = self.container.createNode(selected_deform, 'mydeformer')
+        self.deformer.setInput(0, self.geo)
+        self.deformer.setDisplayFlag(True)
+        self.deformer.setRenderFlag(True)
+        self.deformer.setCurrent(True, clear_all_selected=True)
+        
+        if selected_deform == 'fractal':
+            self.deformer.parm('smooth').set(smooth_value)
+            self.deformer.parm('scale').set(selected_scale)
+            self.deformer.parm('seed').set(random.randint(0,10))
+        elif selected_deform == 'mountain':
+            self.deformer.parm('height').set(selected_scale)
+            if element_size:
+                self.deformer.parm('elementsize').set(element_size)
+                
+        self.UVunwrap()
+        # Layout nodes
+        self.container.layoutChildren()
+
+    def UVunwrap(self):
+        if self.geo is None:
+            print("No geometry created yet.")
+            return
+        # Create a new node for the UV unwrap
+        uvunwrap = self.container.createNode('uvunwrap', 'UVunwrap')
+        uvunwrap.setInput(0, self.deformer)
+        uvunwrap.setDisplayFlag(True)
+        uvunwrap.setRenderFlag(True)
+        uvunwrap.setCurrent(True, clear_all_selected=True)
+        # Layout nodes
+        self.container.layoutChildren()
+
+class PythonTool(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
+        self.logic = DeformShape()
+        self.setWindowTitle('Python Tool')
+        self.resize(250, 200)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        
+        self.createButton = QPushButton('Create Deformed Geometry')
+        self.createButton.clicked.connect(self.createGeoAndDeform)
+        
+        self.shapelabel = QLabel()
+        self.shapelabel.setText('Choose a Shape Below:')
+
+        self.deformlabel = QLabel()
+        self.deformlabel.setText('Choose a Deformer Below:')
+        
+        self.titlelabel = QLabel()
+        self.titlelabel.setText('Shape Deform Tool')
+        self.titlelabel.setStyleSheet("font-size: 24px; font-weight: bold;")  # Change text size and make it bold
+
+        self.chooseShape = QComboBox()
+        for geo in self.logic.geoList:
+            self.chooseShape.addItem(geo)
+
+        self.chooseDeform = QComboBox()
+        for deform in self.logic.deformList:
+            self.chooseDeform.addItem(deform)
+
+        self.sliderLabel = QLabel()
+        self.sliderLabel.setText('Adjust Deformation Strength:')        
+        self.exportButton = QPushButton('Export FBX')
+        self.exportButton.clicked.connect(self.exportFBX)
+
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(5)
+        self.slider.setValue(1)
+        self.slider.valueChanged.connect(self.sliderValueChanged)
+        
+        self.sliderValueLabel = QLabel()
+        self.sliderValueLabel.setText('1')
+        
+        # Additional UI for smooth and element size
+        self.sliderValueLabelSmooth = QLabel()
+        self.sliderValueLabelSmooth.setText('1')
+        
+        self.sliderValueLabelElement = QLabel()
+        self.sliderValueLabelElement.setText('1')
+
+        # Smooth Slider (Fractal)
+        self.smoothSlider = QSlider(Qt.Horizontal)
+        self.smoothSlider.setMinimum(0)
+        self.smoothSlider.setMaximum(5)
+        self.smoothSlider.setValue(2)
+        self.smoothSlider.setVisible(False)
+        self.smoothSlider.valueChanged.connect(self.smoothSliderValueChanged)
+
+        self.smoothSliderLabel = QLabel()
+        self.smoothSliderLabel.setText('Smooth (Fractal):')
+        self.smoothSliderLabel.setVisible(False)
+
+        # Element Size Slider (Mountain)
+        self.elementSizeSlider = QSlider(Qt.Horizontal)
+        self.elementSizeSlider.setMinimum(1)
+        self.elementSizeSlider.setMaximum(10)
+        self.elementSizeSlider.setValue(1)
+        self.elementSizeSlider.setVisible(False)
+        self.elementSizeSlider.valueChanged.connect(self.elementSizeSliderValueChanged)
+
+        self.elementSizeSliderLabel = QLabel()
+        self.elementSizeSliderLabel.setText('Element Size (Mountain):')
+        self.elementSizeSliderLabel.setVisible(False)
+
+        # Hint Button
+        self.hintButton = QPushButton("Need Help?")
+        self.hintButton.clicked.connect(self.showHint)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.titlelabel)
+        layout.addWidget(self.shapelabel)
+        layout.addWidget(self.chooseShape)
+        layout.addWidget(self.deformlabel)
+        layout.addWidget(self.chooseDeform)
+        layout.addWidget(self.sliderLabel)
+        layout.addWidget(self.slider)
+        layout.addWidget(self.sliderValueLabel)
+        layout.addWidget(self.smoothSliderLabel)
+        layout.addWidget(self.smoothSlider)
+        layout.addWidget(self.elementSizeSliderLabel)
+        layout.addWidget(self.elementSizeSlider)
+        layout.addWidget(self.sliderValueLabelSmooth)
+        layout.addWidget(self.sliderValueLabelElement)
+        layout.addWidget(self.createButton)
+        layout.addWidget(self.exportButton)
+        layout.addWidget(self.hintButton)  # Add the hint button to the layout
+        
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
+        # Connect the deformer selection change to update the UI
+        self.chooseDeform.currentIndexChanged.connect(self.updateDeformUI)
+        self.updateDeformUI()
+        self.skipWarning = False
+
+    def closeEvent(self, event):
+        reply = QMessageBox.question(self, "Exit Confirmation", "Are you sure you want to exit?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
+    def createGeoAndDeform(self):
+        objNode = hou.node("/obj")
+    
+        # Only warn if user has NOT disabled warnings
+        if objNode.children() and not self.skipWarning:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Warning")
+            msg.setText("This will delete ALL existing geometry in /obj.\nDo you want to continue?")
+            msg.setIcon(QMessageBox.Warning)
+    
+            yes_button = msg.addButton("Yes", QMessageBox.YesRole)
+            no_button = msg.addButton("No", QMessageBox.NoRole)
+    
+            # Add checkbox
+            from PySide6.QtWidgets import QCheckBox
+            checkbox = QCheckBox("Do not notify me again")
+            msg.setCheckBox(checkbox)
+    
+            msg.exec()
+    
+            if msg.clickedButton() == no_button:
+                return  # Stop operation
+    
+            # If checkbox is checked, remember the preference
+            if checkbox.isChecked():
+                self.skipWarning = True
+    
+        # Continue as normal
+        selected_shape = self.chooseShape.currentText()
+        selected_deform = self.chooseDeform.currentText()
+        selected_scale = self.slider.value()
+    
+        smooth_value = self.smoothSlider.value() if selected_deform == 'fractal' else None
+        element_size = self.elementSizeSlider.value() if selected_deform == 'mountain' else None
+    
+        self.logic.createGeo(selected_shape)
+        self.logic.createDeformed(selected_deform, selected_scale, smooth_value, element_size)
+
+    def sliderValueChanged(self, value):
+        self.sliderValueLabel.setText(str(value))
+
+    def smoothSliderValueChanged(self, value):
+        self.sliderValueLabelSmooth.setText(str(value))
+
+    def elementSizeSliderValueChanged(self, value):
+        self.sliderValueLabelElement.setText(str(value))
+
+    def exportFBX(self):
+        if self.logic.container is None:
+            QMessageBox.warning(self, "Export Error", "No geometry to export. Please create geometry first.")
+            return
+
+        selected_nodes = hou.selectedNodes()
+        if not selected_nodes:
+            QMessageBox.warning(self, "Export Error", "No node selected. Please select a node to export.")
+            return
+
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        export_folder = os.path.join(desktop_path, "DeformedGeo")
+        os.makedirs(export_folder, exist_ok=True)
+
+        base_filename = f"HOU_{self.chooseDeform.currentText()}_{self.chooseShape.currentText()}"
+        file_extension = ".fbx"
+        counter = 1
+        export_path = os.path.join(export_folder, f"{base_filename}{file_extension}")
+        while os.path.exists(export_path):
+            export_path = os.path.join(export_folder, f"{base_filename}_0{counter}{file_extension}")
+            counter += 1
+
+        try:
+            rop_fbx = self.logic.container.createNode("rop_fbx", "exportFBX")
+            rop_fbx.parm("sopoutput").set(export_path)
+            rop_fbx.render()
+            rop_fbx.destroy()
+
+            QMessageBox.information(self, "Export Successful", f"Geometry exported to {export_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export FBX: {str(e)}")
+
+    def updateDeformUI(self):
+        selected_deform = self.chooseDeform.currentText()
+
+        if selected_deform == 'fractal':
+            self.smoothSlider.setVisible(True)
+            self.smoothSliderLabel.setVisible(True)
+            self.elementSizeSlider.setVisible(False)
+            self.elementSizeSliderLabel.setVisible(False)
+            self.sliderValueLabelSmooth.setVisible(True)
+            self.sliderValueLabelElement.setVisible(False)
+            
+        elif selected_deform == 'mountain':
+            self.smoothSlider.setVisible(False)
+            self.smoothSliderLabel.setVisible(False)
+            self.elementSizeSlider.setVisible(True)
+            self.elementSizeSliderLabel.setVisible(True)
+            self.sliderValueLabelSmooth.setVisible(False)
+            self.sliderValueLabelElement.setVisible(True)
+
+        else:
+            self.smoothSlider.setVisible(False)
+            self.smoothSliderLabel.setVisible(False)
+            self.elementSizeSlider.setVisible(False)
+            self.elementSizeSliderLabel.setVisible(False)
+
+    def showHint(self):
+        hint_message = (
+            "Choose a shape and a deformer to start.\n"
+            "Then adjust the sliders for deformation.\n\n"
+            "Sliders:\n\n"
+            "Divisions: Number of subdivisions of the source geometry.\n\n"
+            "Smooth (Fractal): Smooths the overall deformation.\n\n"
+            "Element (Mountain): Distance between peaks of lowest frequency noise.\n"
+            "(The higher the element size, the more controlled the peaks will be)"
+        )
+        QMessageBox.information(self, "Hint", hint_message)
+
+window = PythonTool()
+window.show()
+]]></script>
+  </tool>
+
+  <shelfSetEdit name="shelf_set_1" fileLocation="C:/PROGRA~1/SIDEEF~1/HOUDIN~1.445/houdini/toolbar/ShelfDefinitions.shelf">
+    <addMemberToolshelf name="ArtProofTool" inPosition="14"/>
+  </shelfSetEdit>
+</shelfDocument>
