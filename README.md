@@ -14,6 +14,8 @@ Typical location:
 C:\Users\<you>\Documents\houdini21.0\toolbar  
 After placing the file in that folder, restart Houdini and the shelf will appear.
 
+(Make sure Houdini is installed on your computer, otherwise you WILL receive an error message)
+
 ## Uninstalling the Tool
 
 If you installed the tool in your Documents Houdini folder:  
@@ -54,10 +56,3 @@ Some users place shelf files inside Houdini’s installation directory. If you d
 
 
 **After creating your desired shape, click the 'Export FBX' button to automatically export the geometry onto your desktop. You can then drag the FBX file into Maya, Unreal, etc.
-
-
-TO INSTALL THIS TOOL, SIMPLY CLICK ON THE 'INSTALL_ME' FILE PLEASEEEE
-
-
-(Make sure Houdini is installed on your computer, otherwise you WILL receive an error message)
-
