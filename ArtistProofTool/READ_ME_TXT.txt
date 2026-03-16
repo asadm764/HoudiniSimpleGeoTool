@@ -26,5 +26,5 @@ Mountain
 TO INSTALL THIS TOOL, SIMPLY CLICK ON THE 'INSTALL_ME' FILE PLEASEEEE
 
 
-(Make sure Houdini 20.0, 20.3, or 20.5 is installed on your computer, otherwise you WILL receive an error message)
+(Make sure Houdini is installed on your computer, otherwise you WILL receive an error message)
 
