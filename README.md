@@ -36,21 +36,21 @@ Some users place shelf files inside Houdini’s installation directory. If you d
   
 ## SHAPE OPTIONS
 
-Sphere
+- Sphere
 
-Box
+- Box
 
-Torus
+- Torus
 
-Grid
+- Grid
 
-Tube
+- Tube
 
 ## DEFORM OPTIONS
 
-Fractal
+- Fractal
 
-Mountain
+- Mountain
 
 
 **After creating your desired shape, click the 'Export FBX' button to automatically export the geometry onto your desktop. You can then drag the FBX file into Maya, Unreal, etc.
