@@ -14,7 +14,7 @@ Typical location:
 C:\Users\<you>\Documents\houdini21.0\toolbar  
 After placing the file in that folder, restart Houdini and the shelf will appear.
 
-3. HDA Install
+3. HDA Install  
 Simply double-click on the HDA file and it should load directly to assets in Houdini.
 (Make sure Houdini is installed on your computer, otherwise you WILL receive an error message)
 
